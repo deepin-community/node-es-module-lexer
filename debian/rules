@@ -1,4 +1,68 @@
 #!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
 
 %:
 	dh $@
+
+src/lexer.js: src/lexer.ts
+	tsc -m es2015 src/lexer.ts
+
+lib/lexer.asm.js: src/lexer.asm.js lib/lexer.emcc.asm.js
+	mkdir -p lib
+	rm -f _build.mjs
+	perl -ne 's#process.env.TARGET#"$@"#;$$n=0 if/^'\'\'\''/;s#emcc\.asm\.js#emcc\.wasm\.js#;print if $$n == 2;$$n=1 if m#target\s*=\s*.lib/lexer.asm.js#;$$n=2 if $$n and /^run/;' chompfile.toml >_build.mjs
+	node _build.mjs
+	rm -f _build.mjs
+	#cat src/lexer.asm.js lib/lexer.emcc.wasm.js >lib/lexer.asm.js
+
+# UNUSED FOR NOW: our closure-compiler is too old
+lib/lexer.emcc.asm.js: src/lexer.h src/lexer.c
+	mkdir -p lib
+	emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_setSource']" \
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s \
+	--separate-asm -Wno-logical-op-parentheses -Wno-parentheses
+
+lib/lexer.wasm: src/lexer.h src/lexer.c
+	mkdir -p lib
+	clang -nodefaultlibs --sysroot=/usr -target wasm32-unknown-wasi -Ofast \
+        -fno-exceptions -fvisibility=hidden -mexec-model=reactor -Wl,-lc \
+        -Wl,-error-limit=0 -Wl,-O3 -Wl,--lto-O3 -Wl,--strip-all -Wl,--allow-undefined \
+        -Wl,--export-dynamic -Wno-logical-op-parentheses -Wno-parentheses \
+        -Wl,-z,stack-size=13312,--no-entry,--compress-relocations,--strip-all \
+	-Wl,--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is \
+	-Wl,--export=ie,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es \
+	-Wl,--export=ee,--export=els,--export=ele,--export=f,--export=__heap_base \
+        -Iinclude-wasm src/lexer.c -o $@
+
+# UNUSED FOR NOW
+lib/lexer.wat: lib/lexer.wasm
+	mkdir -p lib
+	wasm2wat lib/lexer.wasm -o lib/lexer.wat
+
+dist/lexer.js: src/lexer.js lib/lexer.wasm
+	mkdir -p dist
+	rm -f _build.mjs
+	perl -ne '$$n=0 if/^'\'\'\''/;print if $$n == 2;$$n=1 if m#target\s*=\s*.dist/lexer.js#;$$n=2 if $$n and /^run/;' chompfile.toml >_build.mjs
+	node _build.mjs
+	rm -f _build.mjs
+
+dist/lexer.cjs: dist/lexer.js
+	mkdir -p dist
+	babeljs dist/lexer.js | terser -c -m -o dist/lexer.cjs
+
+# UNUSED FOR NOW
+dist/lexer.asm.js: lib/lexer.asm.js
+	mkdir -p dist
+	terser -o $@ lib/lexer.asm.js
+
+types/lexer.d.ts: src/lexer.ts
+	tsc --strict --declaration --emitDeclarationOnly --outdir types src/lexer.ts
+
+# USE THIS OVERRIDES WHEN closure-compiler will be updated AND DROP LINK
+#override_dh_auto_build: dist/lexer.js dist/lexer.cjs dist/lexer.asm.js types/lexer.d.ts
+override_dh_auto_build: dist/lexer.js dist/lexer.cjs types/lexer.d.ts
+	ln -s lexer.js dist/lexer.asm.js
