@@ -1,0 +1,6 @@
+_build.mjs
+dist/
+lib/
+src/lexer.js
+src/lexer.js.map
+types/

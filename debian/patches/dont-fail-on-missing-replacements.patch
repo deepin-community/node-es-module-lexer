@@ -1,0 +1,25 @@
+Description: here file isn't generated using closure-compiler
+ Debian's closure-compiler is too old
+Author: Yadd <yadd@debian.org>
+Forwarded: not-needed
+Last-Update: 2022-11-03
+
+--- a/chompfile.toml
++++ b/chompfile.toml
+@@ -161,14 +161,12 @@
+ 
+ 	for (const [from, to, add, after] of replacements) {
+ 		const [matched, match] = source.match(from) || [];
+-		if (!matched) {
+-			console.log(source.slice(0, 1000));
+-			throw new Error(`Match not found for ${from} -> ${to}${after ? `, after ${after}` : ''}`);
+-		}
++		if (matched) {
+ 		const afterIndex = after ? source.indexOf(after) : 0;
+ 		const replaced = source.slice(0, afterIndex) + source.slice(afterIndex).replace(from, to);
+ 		if (add) replacements.push(add(match));
+ 		source = replaced;
++		}
+ 	}
+ 
+ 	writeFileSync(process.env.TARGET, wrapper_start + source);
